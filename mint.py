@@ -25,8 +25,8 @@ Mar 03 2015    Kyle Dove            Added more logging.
                                     Modified to look for nickname of account first.
                                     Then after the name is found, search for balance based on nickname.
                                     Changed to record ALL accounts with nickname. mintArray file no longer needed.
-
-TODO: cleanup
+Mar 05 2015     Kyle Dove           Did some cleanup of code.
+                                    Modified wait from 10 seconds to while true loop check for change in html title.
  
 '''
 
@@ -41,7 +41,7 @@ from xlrd import open_workbook
 from xlwt import Formula, XFStyle
 
 #setup log
-# create logger with 'spam_application'
+# create logger with 'thin_mint'
 logger = logging.getLogger('thin_mint')
 logger.setLevel(logging.INFO)
 logdate = time.strftime("%Y%m%d")
@@ -50,7 +50,7 @@ fh = logging.FileHandler('mintLog_' + logdate + '.log')
 fh.setLevel(logging.INFO)
 # create console handler with a higher log level
 ch = logging.StreamHandler()
-ch.setLevel(logging.ERROR)
+ch.setLevel(logging.INFO)
 # create formatter and add it to the handlers
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)
@@ -96,8 +96,9 @@ driver = webdriver.Firefox()
 driver.get('https://wwws.mint.com/login.event?task=L')
 logger.info('Launching Web Browser')
 
-time.sleep(10)
+#TODO: Modify this sleep timer somehow
 logger.info('Sleeping for 10 seconds')
+time.sleep(10)
 
 #Find Username and Password Elements by Id
 UsernameElement = driver.find_element_by_id("form-login-username")
@@ -109,24 +110,30 @@ PasswordElement.send_keys(passwd)
 logger.info('Submitting Form')
 driver.find_element_by_id("submit").click()
 
-time.sleep(10) #Waits 10 seconds so that the site has time to refresh for new data
-#TODO: Add while loop, check for refreshing indicator, once all indicators are gone, continue.
-logger.info('Sleeping for 10 seconds')
 html_source = driver.page_source
+while True:
+    logger.info('Waiting for response')
+    soup = BeautifulSoup.BeautifulSoup(html_source)
+    logger.debug('Title: ' + soup.title.text)
+    time.sleep(1)
+    if soup.title.text == 'Mint &gt; Overview':
+        break
+    else:
+        html_source = driver.page_source
 
 logger.info('Initiating Soup')
 soup = BeautifulSoup.BeautifulSoup(html_source) 
 
 nicknames = soup.findAll('span', attrs={'class' : 'nickname'})
-print(nicknames)
+logger.debug(nicknames)
 
 for nickname in nicknames:
     txt = nickname.find(text=True)
-    print "Nickname: " + txt.strip()
+    logger.debug("Nickname: " + txt.strip())
     parent = nickname.parent
     parent = parent.parent
     for balance in parent.findAll('span', attrs={'class' : 'balance'}):
-        print('Balance: ' + balance.text)
+        logger.debug('Balance: ' + balance.text)
         combo = []
         combo.append(txt.strip())
         combo.append(balance.text)
@@ -140,8 +147,6 @@ for combo in combos:
     logger.info(counterStr + ' --- Nickname: ' + combo[0] + ' --- Balane: ' + combo[1])
     balances.append(combo[1])
     counter = counter + 1
-    # for item in combo:
-    #     print(item)
 
 logger.info('Iterating through balances')
 for balance in balances:
@@ -150,10 +155,10 @@ for balance in balances:
     newBalances.append(balance)
     if balance > 0:
         assets.append(balance)
-        print(str(balance) + ' is an asset')
+        logger.debug(str(balance) + ' is an asset')
     else:
         liabilities.append(balance)
-        print(str(balance) + ' is a liability')
+        logger.debug(str(balance) + ' is a liability')
 
 #find total assets
 for asset in assets:
